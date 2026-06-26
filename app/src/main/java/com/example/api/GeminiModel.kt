@@ -49,7 +49,7 @@ data class GeminiCardResponse(
     val title: String,
     val description: String,
     val rarity: String, // "Common", "Uncommon", "Rare", "Epic", "Legendary"
-    val power: Int, // 1 to 100
-    val shield: Int, // 1 to 100
+    val power: Int = 0,
+    val shield: Int = 0,
     val type: String // E.g., "Cosmic Beast", "Legendary Knight"
 )

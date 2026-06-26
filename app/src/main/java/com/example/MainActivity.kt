@@ -24,14 +24,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.activity.result.PickVisualMediaRequest
+import com.example.util.CardBitmapGenerator
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -100,6 +100,10 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
     val saveToGalleryState by viewModel.saveToGalleryState.collectAsStateWithLifecycle()
     val savedCards by viewModel.savedCards.collectAsStateWithLifecycle()
 
+    val customApiKey by viewModel.customApiKey.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
     var selectedCardForDetails by remember { mutableStateOf<CardEntity?>(null) }
 
     // Observers for alerts & toasts
@@ -115,6 +119,105 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
         }
     }
 
+    if (showSettingsDialog) {
+        var tempKey by remember { mutableStateOf(customApiKey) }
+        var tempModel by remember { mutableStateOf(selectedModel) }
+
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = {
+                Text(
+                    "Настройки подключения",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Если стандартный ключ возвращает ошибку 403, укажите свой собственный API-ключ Gemini.",
+                        fontSize = 12.sp,
+                        color = Color.LightGray
+                    )
+
+                    OutlinedTextField(
+                        value = tempKey,
+                        onValueChange = { tempKey = it },
+                        label = { Text("Свой API Ключ Gemini", color = Color.Gray) },
+                        placeholder = { Text("AIzaSy... или AQ...", color = Color.Gray) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFECC94B),
+                            unfocusedBorderColor = Color.Gray
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        "Выберите модель ИИ:",
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        fontSize = 14.sp
+                    )
+
+                    val models = listOf("gemini-3.5-flash", "gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro")
+                    models.forEach { modelName ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { tempModel = modelName }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = tempModel == modelName,
+                                onClick = { tempModel = modelName },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = Color(0xFFECC94B),
+                                    unselectedColor = Color.Gray
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = modelName + if (modelName == "gemini-3.5-flash") " (Рекомендуется)" else "",
+                                color = Color.White,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.updateCustomApiKey(tempKey)
+                        viewModel.updateSelectedModel(tempModel)
+                        showSettingsDialog = false
+                        Toast.makeText(context, "Настройки сохранены!", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Сохранить", color = Color(0xFFECC94B), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showSettingsDialog = false }
+                ) {
+                    Text("Отмена", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF1E293B),
+            textContentColor = Color.White
+        )
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -124,7 +227,7 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                            imageVector = Icons.Default.Star,
                             contentDescription = null,
                             tint = Color(0xFFE9C46A),
                             modifier = Modifier.size(24.dp)
@@ -136,6 +239,15 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.5.sp,
                             color = Color.White
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Настройки",
+                            tint = Color(0xFFECC94B)
                         )
                     }
                 },
@@ -153,7 +265,7 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
                 NavigationBarItem(
                     selected = activeTab == 0,
                     onClick = { activeTab = 0 },
-                    icon = { Icon(Icons.Default.Style, contentDescription = "Кузница") },
+                    icon = { Icon(Icons.Default.Star, contentDescription = "Кузница") },
                     label = { Text("Выковать") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Color(0xFFECC94B),
@@ -166,7 +278,7 @@ fun CardGeneratorApp(viewModel: MainViewModel = viewModel()) {
                 NavigationBarItem(
                     selected = activeTab == 1,
                     onClick = { activeTab = 1 },
-                    icon = { Icon(Icons.Default.FolderOpen, contentDescription = "Коллекция") },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Коллекция") },
                     label = { Text("Коллекция") },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = Color(0xFFECC94B),
@@ -304,7 +416,7 @@ fun ForgeScreen(viewModel: MainViewModel) {
             // State A: Empty card silhouette
             EmptyForgeState(
                 onCameraLaunch = { launchCamera() },
-                onGalleryLaunch = { galleryLauncher.launch(ActivityResultContracts.PickVisualMedia.Request()) }
+                onGalleryLaunch = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
             )
         } else {
             // State B: Card has an image! Show preview or final card bitmap
@@ -357,7 +469,7 @@ fun ForgeScreen(viewModel: MainViewModel) {
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
+                                        imageVector = Icons.Default.Star,
                                         contentDescription = null,
                                         tint = Color(0xFFECC94B),
                                         modifier = Modifier.size(48.dp)
@@ -448,7 +560,7 @@ fun EmptyForgeState(onCameraLaunch: () -> Unit, onGalleryLaunch: () -> Unit) {
                 modifier = Modifier.padding(24.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Style,
+                    imageVector = Icons.Default.Star,
                     contentDescription = null,
                     tint = Color.Gray,
                     modifier = Modifier.size(80.dp)
@@ -488,7 +600,7 @@ fun EmptyForgeState(onCameraLaunch: () -> Unit, onGalleryLaunch: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Сделать фото", color = Color.White, fontSize = 15.sp)
             }
@@ -502,7 +614,7 @@ fun EmptyForgeState(onCameraLaunch: () -> Unit, onGalleryLaunch: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color.White)
+                Icon(Icons.Default.Home, contentDescription = null, tint = Color.White)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Из галереи", color = Color.White, fontSize = 15.sp)
             }
@@ -591,7 +703,7 @@ fun BottomActionControl(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.Black)
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color.Black)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Выковать карту ИИ", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
@@ -641,7 +753,7 @@ fun BottomActionControl(
                             if (saveState is SaveState.Saving) {
                                 CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                             } else {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("В галерею", color = Color.White, fontWeight = FontWeight.Bold)
                             }
@@ -704,7 +816,7 @@ fun CollectionScreen(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    imageVector = Icons.Default.Style,
+                    imageVector = Icons.Default.Star,
                     contentDescription = null,
                     tint = Color.Gray.copy(alpha = 0.5f),
                     modifier = Modifier.size(72.dp)
@@ -801,7 +913,7 @@ fun CollectionCardItem(
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.TRANSPARENT, Color.Black.copy(alpha = 0.9f)),
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f)),
                             startY = 150f
                         )
                     )
@@ -824,18 +936,7 @@ fun CollectionCardItem(
                 )
             }
 
-            // Attack/Defense small indicators
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text("⚔️${card.power}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text("🛡️${card.shield}", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            }
+            // No gaming indicators for collector's cards
 
             // Card title & type
             Column(
@@ -992,7 +1093,7 @@ fun CardDetailsDialog(
                         if (isSaving) {
                             CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                         } else {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("В галерею", color = Color.White, fontWeight = FontWeight.Bold)
                         }

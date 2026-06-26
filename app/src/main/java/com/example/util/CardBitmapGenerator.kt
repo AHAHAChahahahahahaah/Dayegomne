@@ -59,13 +59,13 @@ object CardBitmapGenerator {
 
         // 1. Draw atmospheric radial background (glowing core)
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val shader = RadialGradient(
+        val radialBgShader = RadialGradient(
             width / 2f, height / 2f, width * 0.8f,
             intArrayOf(Color.argb(90, Color.red(glowColor), Color.green(glowColor), Color.blue(glowColor)), BG_DARK),
             floatArrayOf(0f, 1f),
             Shader.TileMode.CLAMP
         )
-        bgPaint.shader = shader
+        bgPaint.shader = radialBgShader
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
         // 2. Draw subtle background pattern / textures
@@ -256,32 +256,37 @@ object CardBitmapGenerator {
         staticLayout.draw(canvas)
         canvas.restore()
 
-        // 9. Draw Stats Badge Bar at the footer
-        val footerY = 1110f
-
-        // POWER (Attack) circular badge on the left
-        val powerBadgeX = 180f
-        drawStatBadge(
-            canvas = canvas,
-            centerX = powerBadgeX,
-            centerY = footerY,
-            icon = "⚔️",
-            label = "ATK",
-            value = data.power.toString(),
-            color = Color.parseColor("#EF4444")
+        // 9. Draw Premium Collector's Card Stamp at the footer
+        val stampWidth = 480f
+        val stampHeight = 60f
+        val stampRect = RectF(
+            (width - stampWidth) / 2f,
+            1110f - (stampHeight / 2f),
+            (width + stampWidth) / 2f,
+            1110f + (stampHeight / 2f)
         )
 
-        // SHIELD (Defense) circular badge on the right
-        val shieldBadgeX = 620f
-        drawStatBadge(
-            canvas = canvas,
-            centerX = shieldBadgeX,
-            centerY = footerY,
-            icon = "🛡️",
-            label = "DEF",
-            value = data.shield.toString(),
-            color = Color.parseColor("#3B82F6")
-        )
+        val stampBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor("#151821")
+        }
+        canvas.drawRoundRect(stampRect, 12f, 12f, stampBgPaint)
+
+        val stampBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+            color = rarityColor
+        }
+        canvas.drawRoundRect(stampRect, 12f, 12f, stampBorderPaint)
+
+        val stampTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 22f
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            letterSpacing = 0.15f
+        }
+        canvas.drawText("★ КОЛЛЕКЦИОННАЯ КАРТОЧКА ★", width / 2f, 1110f + 8f, stampTextPaint)
 
         return bitmap
     }
@@ -293,7 +298,7 @@ object CardBitmapGenerator {
         icon: String,
         label: String,
         value: String,
-        color: Int
+        badgeThemeColor: Int
     ) {
         val outerRadius = 55f
         val innerRadius = 50f
@@ -302,7 +307,7 @@ object CardBitmapGenerator {
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = 4f
-            this.color = color
+            this.color = badgeThemeColor
         }
         canvas.drawCircle(centerX, centerY, outerRadius, borderPaint)
 
@@ -322,7 +327,7 @@ object CardBitmapGenerator {
 
         // Value text
         val valuePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            this.color = Color.WHITE
             textSize = 28f
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             textAlign = Paint.Align.CENTER

@@ -49,6 +49,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val cardDatabase = CardDatabase.getDatabase(application)
     private val repository = CardRepository(cardDatabase.cardDao())
 
+    private val prefs = application.getSharedPreferences("card_generator_prefs", android.content.Context.MODE_PRIVATE)
+
+    private val _customApiKey = MutableStateFlow(prefs.getString("custom_api_key", "") ?: "")
+    val customApiKey = _customApiKey.asStateFlow()
+
+    private val _selectedModel = MutableStateFlow(prefs.getString("selected_model", "gemini-3.5-flash") ?: "gemini-3.5-flash")
+    val selectedModel = _selectedModel.asStateFlow()
+
+    fun updateCustomApiKey(key: String) {
+        prefs.edit().putString("custom_api_key", key.trim()).apply()
+        _customApiKey.value = key.trim()
+    }
+
+    fun updateSelectedModel(model: String) {
+        prefs.edit().putString("selected_model", model.trim()).apply()
+        _selectedModel.value = model.trim()
+    }
+
     // UI state for reactive list of saved cards
     val savedCards: StateFlow<List<CardEntity>> = repository.allCards
         .stateIn(
@@ -117,10 +135,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val apiKey = BuildConfig.GEMINI_API_KEY
+        // Check custom API key first, then fallback to BuildConfig.GEMINI_API_KEY
+        val customKey = _customApiKey.value
+        val defaultKey = BuildConfig.GEMINI_API_KEY
+        val apiKey = if (customKey.isNotEmpty()) customKey else defaultKey
+        
+        val selected = _selectedModel.value
+        val model = selected
+
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
             _generationState.value = GenerationState.Error(
-                "Ключ API Gemini не настроен. Настройте его через панель Secrets в AI Studio."
+                "Ключ API Gemini не настроен. Настройте его в приложении (иконка Шестерёнки вверху) или добавьте через Secrets в AI Studio."
             )
             return
         }
@@ -136,14 +161,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // 2. Build structured system prompt
-                val promptText = "Анализируй это изображение и создай для него уникальную, творческую коллекционную игровую карточку. " +
+                val promptText = "Анализируй это изображение и создай для него уникальную, творческую коллекционную (не игровую) карточку. " +
                         "Верни результат строго в формате JSON со следующими полями:\n" +
-                        "1. 'title': короткое, креативное название карточки на русском языке (до 24 символов).\n" +
-                        "2. 'description': атмосферная, художественная подпись или забавное художественное описание карточки на русском языке, основанное на содержимом изображения (до 120 символов).\n" +
-                        "3. 'rarity': редкость карточки. Выбери ровно одно из значений: 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'. Подбирай редкость на основе крутости или необычности изображения.\n" +
-                        "4. 'power': сила атаки (число от 1 до 100).\n" +
-                        "5. 'shield': защита (число от 1 до 100).\n" +
-                        "6. 'type': тип карточки на русском языке (например: 'Космический Кот', 'Магический Лес', 'Древний Металл', 'Небесный Зверь') — коротко, до 3 слов.\n\n" +
+                        "1. 'title': короткое, оригинальное и креативное название карточки на русском языке (до 24 символов). " +
+                        "Важно: Избегай избитых фэнтезийных шаблонов (таких как 'лорд', 'рыцарь', 'древний маг' и т. д.), " +
+                        "если на фотографии нет явных фэнтезийных элементов. Название должно точно подходить под сюжет или юмор снимка.\n" +
+                        "2. 'description': атмосферное, забавное или художественное описание карточки на русском языке, основанное на содержимом изображения (до 120 символов).\n" +
+                        "3. 'rarity': редкость карточки. Выбери ровно одно из значений: 'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'. Подбирай редкость на основе необычности изображения.\n" +
+                        "4. 'type': тип карточки на русском языке, описывающий её суть (например: 'Милый Обжора', 'Городской Романтик', 'Утренний Кофе', 'Верный Друг') — коротко, до 3 слов.\n\n" +
                         "Важно: Ответ должен состоять ТОЛЬКО из корректного JSON-объекта, без каких-либо дополнительных знаков, разметки ```json или другого текста."
 
                 val request = GenerateContentRequest(
@@ -161,9 +186,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
 
-                // 3. Request from Retrofit
+                // 3. Request from Retrofit using dynamic model name
                 val response = withContext(Dispatchers.IO) {
-                    RetrofitClient.service.generateContent(apiKey, request)
+                    RetrofitClient.service.generateContent(model, apiKey, request)
                 }
 
                 val rawJsonText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
@@ -225,6 +250,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
+            } catch (e: retrofit2.HttpException) {
+                e.printStackTrace()
+                val errorBody = e.response()?.errorBody()?.string()
+                val parsedMsg = try {
+                    if (!errorBody.isNullOrEmpty()) {
+                        // Extract "message" field if it is JSON error
+                        val moshi = RetrofitClient.moshiInstance
+                        val mapAdapter = moshi.adapter(Map::class.java)
+                        val map = mapAdapter.fromJson(errorBody) as? Map<*, *>
+                        val errorMap = map?.get("error") as? Map<*, *>
+                        errorMap?.get("message")?.toString() ?: errorBody
+                    } else {
+                        "HTTP ${e.code()}"
+                    }
+                } catch (jsonEx: Exception) {
+                    errorBody ?: "HTTP ${e.code()}"
+                }
+                _generationState.value = GenerationState.Error("Ошибка вызова Gemini API ($parsedMsg)")
             } catch (e: Exception) {
                 e.printStackTrace()
                 _generationState.value = GenerationState.Error("Ошибка вызова Gemini API: ${e.localizedMessage}")
