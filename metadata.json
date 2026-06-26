@@ -1,0 +1,6 @@
+{
+  "name": "Генератор Карточек",
+  "description": "Приложение для создания уникальных коллекционных карточек из ваших фото с помощью ИИ Gemini",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
